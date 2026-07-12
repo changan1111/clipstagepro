@@ -1,6 +1,6 @@
 # ClipStage
 
-Newsroom NAS archive **search & staging** tool for TamilJanam. Editors search the entire media archive from a browser, stage the clips they want, and drag them straight into Final Cut Pro — no manual folder digging, no copying gigabytes around.
+Newsroom NAS archive **search & staging** tool for Any News Room. Editors search the entire media archive from a browser, stage the clips they want, and drag them straight into Final Cut Pro — no manual folder digging, no copying gigabytes around.
 
 - **Backend:** FastAPI (`uvicorn`) + [Typesense](https://typesense.org) search engine
 - **Indexer:** Python script that walks the NAS volumes and feeds Typesense
