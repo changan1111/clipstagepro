@@ -7,7 +7,7 @@ Newsroom NAS archive **search & staging** tool for TamilJanam. Editors search th
 - **Frontend:** single-page browser UI served by the API
 - **Staging:** symlinks clips into a per-editor folder under `/Users/Shared/staging/` — no file copying
 
-Editors reach the app at **http://10.1.10.203:8000**.
+Editors reach the app at **http://10.1.10.XXX:8000**.
 
 ---
 
@@ -15,8 +15,8 @@ Editors reach the app at **http://10.1.10.203:8000**.
 
 ```
    ┌─────────────┐         ┌──────────────────────────── MIDDLE MACHINE ─────────────────────────────┐
-   │   NAS        │  SMB    │  janam_edit_01 / 10.1.10.203                                             │
-   │ 10.1.10.200  │◄───────►│                                                                          │
+   │   NAS        │  SMB    │  janam_edit_01 / 10.1.10.XXX                                             │
+   │ 10.1.10.XXX  │◄───────►│                                                                          │
    │ EDIT, EDIT2, │ mounts  │   mount_volumes.sh ──► /Volumes/EDIT, EDIT2, INGEST, PLAYOUT, DIGITAL    │
    │ INGEST, ...  │         │                                                                          │
    └─────────────┘         │   indexer.py ──scans──► Typesense (:8108) ──serves──► api.py (:8000)     │
@@ -26,8 +26,8 @@ Editors reach the app at **http://10.1.10.203:8000**.
                                                               │ HTTP :8000  +  SMB staging share
                                     ┌─────────────────────────┴───────────────────────────┐
                                     │  EDITOR MACS                                          │
-                                    │  browser → http://10.1.10.203:8000  (search & stage)  │
-                                    │  Finder  → smb://10.1.10.203/staging  (drag to FCP)   │
+                                    │  browser → http://10.1.10.XXX:8000  (search & stage)  │
+                                    │  Finder  → smb://10.1.10.XXX/staging  (drag to FCP)   │
                                     └───────────────────────────────────────────────────────┘
 ```
 
@@ -116,7 +116,7 @@ Editors need nothing installed to search — just the URL. To drag staged clips 
 - **Editors list** is hardcoded in `server/api.py` (`EDITORS = [...]`). Add/remove names there and restart the API.
 - **Volumes to index** are in `server/indexer.py` (`SCAN_VOLUMES`) and mounted by `middle-machine/mount_volumes.sh`. Keep the two lists in sync.
 - **Staging mode** is `LINK_MODE` in `api.py` — `symlink` (default, no copy), `hardlink`, or `copy`.
-- **NAS IP** `10.1.10.200`, **middle machine** `10.1.10.203` — change in `mount_volumes.sh`, the plists, and `open_clipstage.command` if your network differs.
+- **NAS IP** `10.1.10.XXX`, **middle machine** `10.1.10.XX` — change in `mount_volumes.sh`, the plists, and `open_clipstage.command` if your network differs.
 
 ---
 
