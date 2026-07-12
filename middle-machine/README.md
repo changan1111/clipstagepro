@@ -1,6 +1,6 @@
 # ClipStage — Middle Machine Setup
 
-The middle machine (`janam_edit_01` / `10.1.10.203`) runs everything. There are two ways to run it.
+The middle machine (`janam_edit_01` / `10.1.10.XXX`) runs everything. There are two ways to run it.
 
 ## The four pieces
 
