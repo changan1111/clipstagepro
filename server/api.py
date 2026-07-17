@@ -25,7 +25,7 @@ THUMB_DIR      = Path(__file__).parent / "static" / "thumbs"
 
 TYPESENSE_HOST = "localhost"
 TYPESENSE_PORT = "8108"
-TYPESENSE_KEY  = os.environ.get("TYPESENSE_KEY", "SSkt@230619")
+TYPESENSE_KEY  = "SSkt@230619"
 
 EDITORS = [
     "GOKUL","YASHVANTH","PRIYA","MUTHU","KARTHICK","VIGNESH","KATHIRVEL",
@@ -271,8 +271,69 @@ def get_editors():
 
 # ── SEARCH ────────────────────────────────────────────────────────────────────
 
+def _typesense_candidate_ids(q: str):
+    """
+    Ask Typesense's own inverted index which documents could possibly match
+    `q`, so the slow Python exact-match loop below only has to check a small
+    candidate set instead of every cached doc.
+
+    This is deliberately a SUPERSET, never a subset, of the final exact
+    match: Typesense may count a doc as a hit when query words are split
+    across different fields (e.g. one word in filename, one in notes),
+    while our exact matcher additionally requires all words to be in the
+    SAME field. Every real match is guaranteed to still be in this set, so
+    running the existing exact matcher on it afterward is unchanged in
+    behavior — this only narrows what gets scanned, it never changes what
+    counts as a match.
+
+    Returns None (meaning "give up, caller should scan everything") if
+    Typesense errors, or if there are too many pages to safely drain — in
+    both cases the caller falls back to the full scan, so correctness is
+    never at risk, only the speedup is skipped for that one query.
+    """
+    query_by = _search_query_by()
+    ids: set = set()
+    PER_PAGE = 250
+    MAX_PAGES = 20  # past ~5000 candidates, bail — let the full scan handle it
+    try:
+        for page in range(1, MAX_PAGES + 1):
+            result = client.collections["clips"].documents.search({
+                "q": q,
+                "query_by": query_by,
+                "prefix": True,
+                "num_typos": 0,
+                "drop_tokens_threshold": 0,
+                "per_page": PER_PAGE,
+                "page": page,
+            })
+            page_hits = result.get("hits", [])
+            for h in page_hits:
+                doc_id = h.get("document", {}).get("id")
+                if doc_id:
+                    ids.add(doc_id)
+            if len(page_hits) < PER_PAGE:
+                return ids  # drained every page — safe, exact superset
+        return None  # too broad to safely drain — let the full scan handle it
+    except Exception:
+        return None
+
+
+@app.get("/facets/volumes")
+def facet_volumes():
+    """
+    Distinct volume names across the FULL cached doc set — independent of
+    whatever the current search/volume-scope returned. Lets the frontend
+    filter dropdown always show every volume, even when the active search
+    is already scoped to just one of them.
+    """
+    docs = _get_cached_docs()
+    vols = sorted({d.get("volume") for d in docs if d.get("volume")})
+    return {"volumes": vols}
+
+
 @app.get("/search")
-def search_clips(q: str = "", sort: str = "", page: int = 1, per_page: int = 30, all: bool = True):
+def search_clips(q: str = "", sort: str = "", page: int = 1, per_page: int = 30,
+                  all: bool = True, volume: str = ""):
     """
     Search is EXACT WORD / EXACT-COMPOUND match only — no typo tolerance, no
     partial matching.
@@ -285,6 +346,9 @@ def search_clips(q: str = "", sort: str = "", page: int = 1, per_page: int = 30,
 
     Matched fields: filename, category, volume, notes.
 
+    `volume` (optional): scope the scan to just this volume — cheap
+    pre-filter, requested from the UI's volume dropdown.
+
     `sort` (optional): "size_asc" or "size_desc" to order results by file size.
     Default order is the natural match order (no sort).
     """
@@ -292,6 +356,13 @@ def search_clips(q: str = "", sort: str = "", page: int = 1, per_page: int = 30,
         return {"hits": [], "total": 0}
     try:
         docs = _get_cached_docs()
+        if volume:
+            docs = [d for d in docs if d.get("volume") == volume]
+
+        candidate_ids = _typesense_candidate_ids(q)
+        if candidate_ids is not None:
+            docs = [d for d in docs if d.get("id") in candidate_ids]
+
         fields_to_check = ["filename", "category", "volume", "folder", "notes"]
 
         hits = []
@@ -487,11 +558,38 @@ def list_staging(editor: str):
     editor_staging = Path(STAGING_PATH) / editor
     if not editor_staging.exists():
         return {"clips": []}
-    clips = [
-        {"name": i.name, "exists": i.exists()}
-        for i in editor_staging.iterdir()
-        if i.is_file() or i.is_symlink()
-    ]
+
+    # uid+mtime for thumbnails / newest-first sort (#3 staging cards)
+    path_to_doc = {doc.get("path"): doc for doc in _get_cached_docs()}
+
+    clips = []
+    for i in editor_staging.iterdir():
+        if not (i.is_file() or i.is_symlink()):
+            continue
+        try:
+            mtime = i.lstat().st_mtime
+        except OSError:
+            mtime = 0
+
+        uid = ""
+        try:
+            # Use a single-hop readlink (raw target string), not .resolve() —
+            # resolve() re-canonicalizes through /Volumes mount aliases and
+            # no longer matches the literal "path" string stored in Typesense,
+            # which is the same NAS double-mount mismatch as known issue #1.
+            target = os.readlink(str(i)) if i.is_symlink() else str(i)
+            doc = path_to_doc.get(target)
+            if doc:
+                uid = doc.get("id", "")
+        except OSError:
+            pass
+
+        clips.append({
+            "name":   i.name,
+            "exists": i.exists(),
+            "uid":    uid,
+            "mtime":  mtime,
+        })
     return {"clips": clips, "editor": editor}
 
 
