@@ -594,7 +594,7 @@ mark {
 
 /* ── STAGING SIDEBAR ── */
 .staging-panel {
-  width: 240px; border-left: 1px solid var(--border);
+  width: 280px; border-left: 1px solid var(--border);
   background: var(--surface);
   display: flex; flex-direction: column;
   flex-shrink: 0;
@@ -622,6 +622,33 @@ mark {
   padding: 5px 4px;
   border-bottom: 1px solid rgba(0,0,0,0.08);
   word-break: break-all; line-height: 1.3;
+}
+.staging-card {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 8px;
+  border-bottom: 1px solid rgba(0,0,0,0.08);
+}
+.staging-card:first-child {
+  background: rgba(0,150,80,0.06);
+  border-left: 3px solid var(--green);
+}
+.stg-thumb {
+  width: 56px; height: 32px; flex-shrink: 0;
+  background: var(--surface2);
+  border-radius: 3px; overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--border); font-size: 13px;
+}
+.stg-thumb img { width:100%; height:100%; object-fit:cover; display:block; }
+.stg-info { flex:1; min-width:0; }
+.stg-name {
+  font-size: 10px; font-weight: 600;
+  color: var(--text-bright);
+  line-height: 1.3; word-break: break-all;
+}
+.stg-meta {
+  font-size: 9px; color: var(--muted);
+  margin-top: 2px; display: flex; gap: 5px; align-items: center;
 }
 .dot {
   width: 6px; height: 6px;
@@ -924,13 +951,6 @@ kbd {
       </button>
     </div>
 
-    <!-- Filter toggle (#3) -->
-    <button class="filter-btn" id="filterBtn" onclick="toggleFilterPanel()" title="Filter results">
-      <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>
-      FILTER
-      <span class="dot"></span>
-    </button>
-
     <span id="selPill" class="sel-pill">0 selected</span>
 
     <!-- Clear Selection (#12) -->
@@ -961,8 +981,8 @@ kbd {
   </div>
 </div>
 
-<!-- Filter Panel (#3) -->
-<div class="filter-panel" id="filterPanel">
+<!-- Filter Panel (#3) — always visible, no toggle click needed -->
+<div class="filter-panel open" id="filterPanel">
   <div class="filter-row">
     <div class="filter-group">
       <label>VOLUME</label>
@@ -1063,13 +1083,37 @@ kbd {
 
 <!-- Notes / Metadata edit modal -->
 <div id="notesOverlay" onclick="if(event.target===this) closeNotesModal()">
-  <div class="notes-box">
+  <div class="notes-box" style="width:500px">
     <h3 id="notesClipName"></h3>
+    <div class="notes-sub" id="notesConflictBanner" style="color:var(--red);display:none;margin-bottom:8px"></div>
     <div class="notes-sub">Notes</div>
     <textarea id="notesTextarea" maxlength="5000" placeholder="Add a note for this clip…"></textarea>
+    <div style="margin-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div>
+        <div style="font-size:10px;color:var(--muted);font-family:'Space Mono',monospace;letter-spacing:1.5px;margin-bottom:4px">TAGS</div>
+        <input id="metaTags" type="text" placeholder="vijay, speech, chennai, 2024"
+          style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:7px;color:var(--text-bright);font-family:'Inter',sans-serif;font-size:12px;padding:7px 10px;outline:none;box-sizing:border-box">
+      </div>
+      <div>
+        <div style="font-size:10px;color:var(--muted);font-family:'Space Mono',monospace;letter-spacing:1.5px;margin-bottom:4px">REPORTER</div>
+        <input id="metaReporter" type="text" placeholder="Reporter name"
+          style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:7px;color:var(--text-bright);font-family:'Inter',sans-serif;font-size:12px;padding:7px 10px;outline:none;box-sizing:border-box">
+      </div>
+      <div>
+        <div style="font-size:10px;color:var(--muted);font-family:'Space Mono',monospace;letter-spacing:1.5px;margin-bottom:4px">LOCATION</div>
+        <input id="metaLocation" type="text" placeholder="Chennai, Delhi…"
+          style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:7px;color:var(--text-bright);font-family:'Inter',sans-serif;font-size:12px;padding:7px 10px;outline:none;box-sizing:border-box">
+      </div>
+      <div>
+        <div style="font-size:10px;color:var(--muted);font-family:'Space Mono',monospace;letter-spacing:1.5px;margin-bottom:4px">DESCRIPTION</div>
+        <input id="metaDesc" type="text" placeholder="Brief description…"
+          style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:7px;color:var(--text-bright);font-family:'Inter',sans-serif;font-size:12px;padding:7px 10px;outline:none;box-sizing:border-box">
+      </div>
+    </div>
+    <div id="metaUpdatedBy" style="font-size:10px;color:var(--muted);margin-top:10px;font-family:'Space Mono',monospace"></div>
     <div class="notes-actions">
       <button class="notes-cancel" onclick="closeNotesModal()">Cancel</button>
-      <button class="notes-save" id="notesSaveBtn" onclick="saveNotes()">Save</button>
+      <button class="notes-save" id="notesSaveBtn" onclick="saveNotes()">💾 Save to NAS</button>
     </div>
   </div>
 </div>
@@ -1120,6 +1164,7 @@ async function init() {
   } catch(e) {
     showToast('Cannot reach ClipStage server', 'error');
   }
+  loadVolumeFacet();
 }
 
 // ── LOGIN ─────────────────────────────────────────────────────────────────
@@ -1220,7 +1265,12 @@ async function doSearch(q) {
   document.getElementById('resultsGrid').innerHTML = '';
   document.getElementById('resultsList').innerHTML = '';
   try {
-    const res = await fetch(`${API}/search?q=${encodeURIComponent(q)}`);
+    // Pre-scope by the currently selected volume (if any) — cheaper scan
+    // server-side, on top of the Typesense candidate-narrowing it already does.
+    const vol = document.getElementById('filterVolume').value;
+    let url = `${API}/search?q=${encodeURIComponent(q)}`;
+    if (vol) url += `&volume=${encodeURIComponent(vol)}`;
+    const res = await fetch(url);
     const data = await res.json();
     document.getElementById('resultsMeta').textContent = `${data.total.toLocaleString()} clips found`;
     if (!data.hits.length) {
@@ -1233,12 +1283,26 @@ async function doSearch(q) {
     }
     lastHits = data.hits;
     originalHits = data.hits.slice();
-    populateFilterVolumes(data.hits);
+    populateFilterFolders(data.hits);
     sortAndRender();
   } catch(e) {
     document.getElementById('resultsMeta').textContent = 'Search failed';
     showToast('Search error — check server', 'error');
   }
+}
+
+// Volume dropdown is populated once (all volumes, independent of whatever
+// the current — possibly volume-scoped — search results contain), so
+// switching volumes is never limited to "volumes seen in this result set".
+async function loadVolumeFacet() {
+  try {
+    const res = await fetch(`${API}/facets/volumes`);
+    const data = await res.json();
+    const sel = document.getElementById('filterVolume');
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">All volumes</option>' +
+      (data.volumes || []).map(v => `<option value="${escapeHtml(v)}"${v===cur?' selected':''}>${escapeHtml(v)}</option>`).join('');
+  } catch(e) { /* silent — dropdown just stays as-is */ }
 }
 
 function thumbUrl(clip) {
@@ -1424,6 +1488,9 @@ function showEmpty() {
 async function stageSelected() {
   if (!currentEditor) { showToast('Please select your name first', 'error'); return; }
   if (!selected.size)  { showToast('No clips selected', 'error'); return; }
+  // Conflict check
+  const okStage = await checkConflictsBeforeStage([...selected]);
+  if (!okStage) return;
   const btn = document.getElementById('stageBtn');
   btn.disabled = true; btn.textContent = '⏳ Staging…';
   try {
@@ -1466,11 +1533,32 @@ function renderStaging(clips) {
     list.innerHTML = `<div class="staging-empty">No clips staged yet.<br><br>Select clips, then click <strong>Stage Clips</strong>.</div>`;
     return;
   }
-  list.innerHTML = clips.map(c => `
-    <div class="staging-item">
-      <div class="dot" style="background:${c.exists ? 'var(--green)' : 'var(--red)'}"></div>
-      ${c.name}
-    </div>`).join('');
+  // Sort newest first — last staged clip on top
+  const sorted = [...clips].sort((a,b) => (b.mtime||0) - (a.mtime||0));
+  list.innerHTML = sorted.map((c, i) => {
+    const uid   = c.uid || '';
+    const img   = uid
+      ? `<img src="${API}/thumb/${uid}" alt="" onerror="this.style.display='none';this.nextSibling&&(this.nextSibling.style.display='block')">`
+      : '';
+    const dot   = c.exists ? 'var(--green)' : 'var(--red)';
+    const time  = c.mtime
+      ? new Date(c.mtime * 1000).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})
+      : '';
+    const newBadge = i === 0
+      ? `<span style="background:var(--green);color:#000;font-size:8px;padding:1px 4px;border-radius:3px;font-weight:700">NEW</span>`
+      : '';
+    return `<div class="staging-card">
+      <div class="stg-thumb">${img}<span>${uid ? '' : '🎬'}</span></div>
+      <div class="stg-info">
+        <div class="stg-name">${escapeHtml(c.name)}</div>
+        <div class="stg-meta">
+          <span style="color:${dot}">●</span>
+          ${time}
+          ${newBadge}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 async function clearStaging() {
@@ -1513,21 +1601,67 @@ function openNotesModal(id, filename) {
   editingClipId = id;
   const clip = lastHits.find(c => c.id === id);
   document.getElementById('notesClipName').textContent = filename;
-  document.getElementById('notesTextarea').value = (clip && clip.notes) || '';
+  document.getElementById('notesTextarea').value  = (clip && clip.notes) || '';
+  document.getElementById('metaTags').value        = (clip && clip.tags_custom) || '';
+  document.getElementById('metaReporter').value    = (clip && clip.reporter) || '';
+  document.getElementById('metaLocation').value    = (clip && clip.location) || '';
+  document.getElementById('metaDesc').value        = (clip && clip.description) || '';
+  document.getElementById('metaUpdatedBy').textContent =
+    (clip && clip.meta_updated_by)
+      ? `Last edited by ${clip.meta_updated_by} at ${clip.meta_updated_at}`
+      : '';
+  // Conflict check
+  const banner = document.getElementById('notesConflictBanner');
+  banner.style.display = 'none';
+  if (id && currentEditor) {
+    fetch(`${API}/lock/${id}`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({editor: currentEditor})
+    }).then(r => r.json()).then(d => {
+      if (d.conflict) {
+        banner.textContent = `⚠ ${d.locked_by} is currently editing this clip (since ${d.since})`;
+        banner.style.display = 'block';
+      }
+    }).catch(() => {});
+  }
   document.getElementById('notesOverlay').classList.add('visible');
   setTimeout(() => document.getElementById('notesTextarea').focus(), 50);
 }
 
 function closeNotesModal() {
   document.getElementById('notesOverlay').classList.remove('visible');
+  // Release conflict lock
+  if (editingClipId && currentEditor) {
+    fetch(`${API}/lock/${editingClipId}`, {
+      method: 'DELETE',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({editor: currentEditor})
+    }).catch(() => {});
+  }
   editingClipId = null;
 }
 
 async function saveNotes() {
   if (!editingClipId) return;
+  if (!currentEditor) { showToast('Select your name first', 'error'); return; }
   const notes = document.getElementById('notesTextarea').value;
   const btn = document.getElementById('notesSaveBtn');
   btn.disabled = true; btn.textContent = 'Saving…';
+  // Save metadata to NAS sidecar
+  try {
+    await fetch(`${API}/meta/${editingClipId}`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        editor:      currentEditor,
+        tags:        document.getElementById('metaTags').value.trim(),
+        description: document.getElementById('metaDesc').value.trim(),
+        reporter:    document.getElementById('metaReporter').value.trim(),
+        location:    document.getElementById('metaLocation').value.trim(),
+      })
+    });
+  } catch(e) { /* non-fatal */ }
   try {
     const res = await fetch(`${API}/clip/${encodeURIComponent(editingClipId)}/notes`, {
       method: 'PATCH',
@@ -1574,14 +1708,11 @@ function applyThemeByName(name) {
 // ══════════════════════════════════════════════════════════════════════════════
 let activeFilters = { volume: '', folder: '', ext: '', sizeMin: '', sizeMax: '' };
 
-function toggleFilterPanel() {
-  const panel = document.getElementById('filterPanel');
-  const btn   = document.getElementById('filterBtn');
-  const open  = panel.classList.toggle('open');
-  btn.classList.toggle('active', open);
-}
 function onVolumeFilterChange() {
-  // repopulate folder dropdown scoped to the chosen volume, then filter
+  // Volume is now a server-side pre-filter (perf), so re-run the actual
+  // search instead of just re-filtering the already-fetched result set.
+  const q = document.getElementById('searchInput').value.trim();
+  if (q) { doSearch(q); return; }
   populateFilterFolders(originalHits);
   applyFilters();
 }
@@ -1593,9 +1724,6 @@ function applyFilters() {
     sizeMin: document.getElementById('filterSizeMin').value,
     sizeMax: document.getElementById('filterSizeMax').value,
   };
-  const hasFilter = Object.values(activeFilters).some(v => v !== '');
-  document.getElementById('filterBtn').classList.toggle('has-filters', hasFilter);
-
   // filter against originalHits then re-sort
   if (!originalHits.length) return;
   let filtered = originalHits.filter(c => {
@@ -1617,7 +1745,8 @@ function resetFilters() {
   document.getElementById('filterSizeMin').value = '';
   document.getElementById('filterSizeMax').value = '';
   activeFilters = { volume: '', folder: '', ext: '', sizeMin: '', sizeMax: '' };
-  document.getElementById('filterBtn').classList.remove('has-filters');
+  const q = document.getElementById('searchInput').value.trim();
+  if (q) { doSearch(q); return; }  // volume was a server-side scope — re-run to un-scope it
   populateFilterFolders(originalHits);
   if (originalHits.length) { lastHits = [...originalHits]; sortAndRender(); }
 }
@@ -1727,7 +1856,7 @@ async function runIndexer() {
   try {
     const res = await fetch(`${API}/admin/refresh-cache`, { method: 'POST' });
     const data = await res.json();
-    showToast(`✓ Index refreshed — ${data.count} clips`, 'success');
+    showToast(`✓ Index refreshed — ${data.found || data.count || data.total || 'OK'} clips`, 'success');
   } catch(e) {
     showToast('Could not reach API', 'error');
   } finally {
@@ -1828,6 +1957,25 @@ document.addEventListener('keydown', e => {
     stageSelected();
   }
 });
+
+// ── CONFLICT CHECK ───────────────────────────────────────────────────────────
+async function checkConflictsBeforeStage(paths) {
+  if (!paths.length) return true;
+  try {
+    const res  = await fetch(`${API}/check-conflicts`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({editor: currentEditor, paths}),
+    });
+    const data = await res.json();
+    if (data.has_conflicts) {
+      const names = data.conflicts.map(c =>
+        `${c.path.split('/').pop()} (used by ${c.locked_by})`).join('\n');
+      return confirm(`⚠ These clips are in use by another editor:\n\n${names}\n\nStage anyway?`);
+    }
+    return true;
+  } catch(e) { return true; }
+}
 
 init();
 </script>
