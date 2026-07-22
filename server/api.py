@@ -729,6 +729,79 @@ def open_staging_in_finder(editor: str):  # POST /open-staging/{editor}
         raise HTTPException(status_code=500, detail=str(e))
 
 
+
+# ── VIDEO STREAM ──────────────────────────────────────────────────────────────
+from fastapi.responses import StreamingResponse as _StreamingResponse
+import subprocess as _subprocess
+import shutil as _shutil
+
+# Resolve ffmpeg once at import time. launchd services run with a minimal
+# PATH, so a bare "ffmpeg" can silently fail to launch (Popen raises
+# FileNotFoundError inside the generator, after the 200 + headers have
+# already gone out — the client just sees an empty video with no error).
+# Falling back to common Homebrew install locations avoids that trap.
+_FFMPEG_BIN = (
+    _shutil.which("ffmpeg")
+    or next((p for p in ("/opt/homebrew/bin/ffmpeg", "/usr/local/bin/ffmpeg")
+             if Path(p).exists()), None)
+)
+
+@app.get("/stream/{uid}")
+def stream_clip(uid: str):
+    if not uid.isalnum() or len(uid) > 32:
+        raise HTTPException(status_code=400, detail="Invalid uid")
+    if not _FFMPEG_BIN:
+        raise HTTPException(status_code=500, detail="ffmpeg not found on server PATH")
+    doc = next((d for d in _CACHE["docs"] if d.get("id") == uid), None)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Clip not found")
+    clip_path = doc.get("path", "")
+    if not clip_path or not Path(clip_path).exists():
+        raise HTTPException(status_code=404, detail="File not found on disk")
+
+    def generate():
+        cmd = [
+            _FFMPEG_BIN, "-i", clip_path,
+            "-t", "300",
+            "-vf", "scale=1280:-2",
+            "-c:v", "libx264",
+            "-preset", "ultrafast",
+            "-crf", "28",
+            "-c:a", "aac",
+            "-b:a", "128k",
+            "-movflags", "frag_keyframe+empty_moov+faststart",
+            "-f", "mp4", "pipe:1",
+        ]
+        proc = _subprocess.Popen(cmd, stdout=_subprocess.PIPE, stderr=_subprocess.PIPE)
+        sent_bytes = 0
+        try:
+            while True:
+                chunk = proc.stdout.read(65536)
+                if not chunk:
+                    break
+                sent_bytes += len(chunk)
+                yield chunk
+        finally:
+            proc.stdout.close()
+            stderr_out = proc.stderr.read() if proc.stderr else b""
+            proc.kill()
+            proc.wait()
+            # Zero bytes out almost always means ffmpeg errored immediately
+            # (bad codec, unreadable NAS path, etc). Log it so it shows up
+            # in the launchd log instead of failing completely silently.
+            if sent_bytes == 0:
+                print(f"[stream] ffmpeg produced 0 bytes for uid={uid} "
+                      f"path={clip_path} rc={proc.returncode}\n"
+                      f"{stderr_out.decode(errors='replace')[-2000:]}",
+                      flush=True)
+
+    filename = doc.get("filename", "clip.mp4")
+    return _StreamingResponse(
+        generate(),
+        media_type="video/mp4",
+        headers={"Content-Disposition": f'inline; filename="{filename}"'}
+    )
+
 # ── HEALTH ────────────────────────────────────────────────────────────────────
 
 @app.get("/health")
@@ -758,4 +831,16 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 @app.get("/")
 def serve_index():
-    return _FileResponse(_os.path.join(_os.path.dirname(__file__), "static", "index.html"))
+    from fastapi.responses import Response
+    path = _os.path.join(_os.path.dirname(__file__), "static", "index.html")
+    with open(path, "r", encoding="utf-8") as f:
+        html = f.read()
+    return Response(
+        content=html,
+        media_type="text/html",
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate",
+            "Pragma": "no-cache",
+            "Expires": "0"
+        }
+    )
