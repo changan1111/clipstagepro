@@ -49,7 +49,7 @@ EXCLUDE_FOLDERS = {
     "$recycle.bin",
 }
 
-TYPESENSE_KEY  = os.environ.get("TYPESENSE_KEY", "SSkt@230619")
+TYPESENSE_KEY  = "SSkt@230619"
 TYPESENSE_HOST = "localhost"
 TYPESENSE_PORT = "8108"
 API_PORT       = "8000"   # ClipStage FastAPI port — used for cache refresh
